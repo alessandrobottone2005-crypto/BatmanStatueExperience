@@ -95,6 +95,10 @@ function Clue({
         <button
           className={`clue-card ${hint ? "clue-hint" : ""}`}
           disabled={disabled}
+          onPointerDown={(event) => {
+            if (event.button === 0)
+              event.currentTarget.setPointerCapture(event.pointerId);
+          }}
           onClick={onOpen}
           aria-label={`Apri indizio ${id}`}
         >

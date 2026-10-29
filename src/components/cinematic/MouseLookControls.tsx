@@ -16,9 +16,9 @@ export function MouseLookControls({
     const move = (e: MouseEvent) => {
       // Hit testing the projected control is more reliable than compositor
       // :hover timing on software renderers. Hold the camera before the click.
-      const clue = document
-        .elementFromPoint(e.clientX, e.clientY)
-        ?.closest(".clue-card");
+      const clue =
+        (e.target as Element)?.closest?.(".clue-card") ??
+        document.elementFromPoint(e.clientX, e.clientY)?.closest(".clue-card");
       if (!clue && (e.clientX <= 12 || e.clientX >= innerWidth - 12)) {
         const focused = document.activeElement;
         if (focused instanceof HTMLElement && focused.matches(".clue-card"))
@@ -73,16 +73,9 @@ export function MouseLookControls({
       return;
     const hovered = document.querySelector(".clue-card:hover");
     const bounds = hovered?.getBoundingClientRect();
-    // Let a partly clipped card enter the viewport before holding the camera.
-    if (
-      bounds &&
-      (Math.abs(pointer.current.x) < 0.98 ||
-        (bounds.left >= 0 &&
-          bounds.right <= innerWidth &&
-          bounds.top >= 94 &&
-          bounds.bottom <= innerHeight))
-    )
-      return;
+    // The outermost edge keeps rotating even when a card passes underneath.
+    // Move onto its center to hold it still and inspect it.
+    if (bounds && Math.abs(pointer.current.x) < 0.98) return;
     const speed = (n: number) =>
       Math.abs(n) > 0.25
         ? Math.sign(n) * ((Math.abs(n) - 0.25) / 0.75) ** 2
