@@ -14,6 +14,20 @@ export function MouseLookControls({
   useEffect(() => {
     const pressed = keys.current;
     const move = (e: MouseEvent) => {
+      // Hit testing the projected control is more reliable than compositor
+      // :hover timing on software renderers. Hold the camera before the click.
+      const clue = document
+        .elementFromPoint(e.clientX, e.clientY)
+        ?.closest(".clue-card");
+      if (!clue && (e.clientX <= 12 || e.clientX >= innerWidth - 12)) {
+        const focused = document.activeElement;
+        if (focused instanceof HTMLElement && focused.matches(".clue-card"))
+          focused.blur();
+      }
+      if (clue && e.clientX > 12 && e.clientX < innerWidth - 12) {
+        pointer.current = { x: 0, y: 0 };
+        return;
+      }
       pointer.current = {
         x: (e.clientX / innerWidth) * 2 - 1,
         y: 1 - (e.clientY / innerHeight) * 2,
@@ -52,7 +66,10 @@ export function MouseLookControls({
     };
   }, [enabled]);
   useFrame((_, delta) => {
-    if (!enabled || document.querySelector(".keyboard-clues:focus-within"))
+    if (
+      !enabled ||
+      document.querySelector(".keyboard-clues:focus-within, .clue-card:focus")
+    )
       return;
     const hovered = document.querySelector(".clue-card:hover");
     const bounds = hovered?.getBoundingClientRect();

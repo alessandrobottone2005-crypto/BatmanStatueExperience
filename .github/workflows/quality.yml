@@ -10,6 +10,10 @@ permissions:
   contents: read
 jobs:
   verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -20,15 +24,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
-      - run: ./node_modules/.bin/playwright install --with-deps chromium firefox webkit
-      - run: xvfb-run --auto-servernum npm run test:e2e -- --headed
+      - run: ./node_modules/.bin/playwright install --with-deps ${{ matrix.browser }}
+      - run: xvfb-run --auto-servernum npm run test:e2e -- --headed --project=${{ matrix.browser }}
         env:
           CI: "true"
           LIBGL_ALWAYS_SOFTWARE: "1"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: browser-regression-report
+          name: browser-regression-${{ matrix.browser }}
           path: |
             playwright-report/
             test-results/

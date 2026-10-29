@@ -98,7 +98,6 @@ function Experience() {
   }, [run, resetTimer]);
   useEffect(() => {
     setPaused(false);
-    setReady(false);
     window.scrollTo(0, 0);
     heading.current?.focus();
   }, [phase]);
