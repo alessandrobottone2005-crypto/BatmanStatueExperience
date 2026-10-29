@@ -52,9 +52,17 @@ export function MouseLookControls({
     };
   }, [enabled]);
   useFrame((_, delta) => {
+    if (!enabled || document.querySelector(".keyboard-clues:focus-within"))
+      return;
+    const hovered = document.querySelector(".clue-card:hover");
+    const bounds = hovered?.getBoundingClientRect();
+    // Let a partly clipped card enter the viewport before holding the camera.
     if (
-      !enabled ||
-      document.querySelector(".clue-card:hover, .keyboard-clues:focus-within")
+      bounds &&
+      bounds.left >= 0 &&
+      bounds.right <= innerWidth &&
+      bounds.top >= 94 &&
+      bounds.bottom <= innerHeight
     )
       return;
     const speed = (n: number) =>

@@ -3,6 +3,9 @@ on:
   push:
     branches: [main, codex/audit-remediation]
   pull_request:
+concurrency:
+  group: quality-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -21,3 +24,11 @@ jobs:
       - run: npm run test:e2e
         env:
           CI: "true"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: browser-regression-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

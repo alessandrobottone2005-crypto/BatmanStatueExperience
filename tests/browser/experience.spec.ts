@@ -418,3 +418,80 @@ test("clipboard denial provides an honest manual alternative", async ({
   await expect(page.getByLabel("Risultato da copiare")).toBeVisible();
   await expect(page.getByText("Risultato copiato.")).toHaveCount(0);
 });
+
+test("intro pause preserves remaining briefing time", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/");
+  await page.clock.fastForward(2500);
+  await page.getByRole("button", { name: "Metti in pausa esperienza" }).click();
+  await page.clock.fastForward(20000);
+  await expect(page.locator(".intro-message")).toContainText("Batman…");
+  await page.getByRole("button", { name: "Riprendi", exact: true }).click();
+  await page.clock.fastForward(1600);
+  await expect(page.locator(".intro-message")).toContainText(
+    "Trova i miei cinque indizi.",
+  );
+  await page.clock.fastForward(4000);
+  await expect(page.locator(".intro-message")).toContainText("Tre minuti.");
+  await expect(page.getByRole("button", { name: "Salta intro" })).toBeVisible();
+  await page.clock.fastForward(4000);
+  await expect(
+    page.getByRole("button", { name: "Accetta la sfida" }),
+  ).toBeVisible();
+});
+test("mute reaches existing music and prevents riddle beeps", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const target = window as unknown as {
+      __beeps: number;
+      __music: HTMLAudioElement[];
+    };
+    target.__beeps = 0;
+    target.__music = [];
+    const OriginalContext = window.AudioContext;
+    window.AudioContext = class extends OriginalContext {
+      createOscillator() {
+        target.__beeps++;
+        return super.createOscillator();
+      }
+    };
+    const OriginalAudio = window.Audio;
+    window.Audio = class extends OriginalAudio {
+      constructor(src?: string) {
+        super(src);
+        target.__music.push(this);
+      }
+    };
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await start(page);
+  const clue = page
+    .locator(".keyboard-clues")
+    .getByRole("button", { name: "Apri indizio 1" });
+  await clue.focus();
+  await clue.press("Enter");
+  await page.getByRole("button", { name: "Arkham", exact: true }).click();
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __beeps: number }).__beeps,
+    ),
+  ).toBe(1);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Silenzia audio" }).click();
+  expect(
+    await page.evaluate(() =>
+      (window as unknown as { __music: HTMLAudioElement[] }).__music.every(
+        (audio) => audio.muted,
+      ),
+    ),
+  ).toBe(true);
+  await clue.focus();
+  await clue.press("Enter");
+  await page.getByRole("button", { name: "Arkham", exact: true }).click();
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __beeps: number }).__beeps,
+    ),
+  ).toBe(1);
+});

@@ -21,16 +21,19 @@ export default function IntroScreen({
   useEffect(() => {
     if (isPaused || step >= 3) return;
     const started = performance.now();
+    let fired = false;
     const t = setTimeout(() => {
+      fired = true;
       remaining.current = 4000;
       setStep((s) => s + 1);
     }, remaining.current);
     return () => {
       clearTimeout(t);
-      remaining.current = Math.max(
-        0,
-        remaining.current - (performance.now() - started),
-      );
+      if (!fired)
+        remaining.current = Math.max(
+          0,
+          remaining.current - (performance.now() - started),
+        );
     };
   }, [step, isPaused]);
   return (
