@@ -1,4 +1,4 @@
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas } from "@react-three/fiber";
 import { PerspectiveCamera, Html } from "@react-three/drei";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
@@ -89,18 +89,20 @@ function Clue({
   onOpen: () => void;
   disabled: boolean;
 }) {
-  const ref = useRef<THREE.Group>(null);
-  useFrame(({ camera }) => ref.current?.quaternion.copy(camera.quaternion));
   return (
-    <group position={position} ref={ref}>
-      <Html transform distanceFactor={120} center>
+    <group position={position}>
+      <Html distanceFactor={200} center>
         <button
           className={`clue-card ${hint ? "clue-hint" : ""}`}
           disabled={disabled}
           onClick={onOpen}
           aria-label={`Apri indizio ${id}`}
         >
-          <img src="/assets/images/JollyJokerCard_Front.jpg" alt="" />
+          <img
+            src="/assets/images/JollyJokerCard_Front.jpg"
+            alt=""
+            draggable={false}
+          />
           <span>INDIZIO {id}</span>
         </button>
       </Html>
