@@ -1,188 +1,71 @@
-# 🦇 Batman 87th Anniversary — Immersive Narrative Experience
+# Batman 87th Anniversary
 
-> **Esperienza cinematografica interattiva** per la statua in edizione limitata Batman 87th Anniversary.  
-> Progetto accademico IUAD — Corso UI/UX Design.
+Esperienza accademica desktop di Alessandro Bottone: esplorazione della Batcaverna, cinque enigmi del Joker e presentazione cinematica di una statua da collezione. **Non è un negozio:** il checkout è una simulazione locale; usare soltanto dati fittizi.
 
-> 🔄 **In trasformazione:** il progetto sta migrando dal design system AI-generated al **Design System ufficiale Figma** dell'autore. Vedi [`docs/DESIGN_SYSTEM.md`](./docs/DESIGN_SYSTEM.md).
+## Avvio riproducibile
 
----
+Richiede Node.js 22.12+ oppure 24 e npm. Vercel usa Node 24.
 
-## Concept
-
-Una narrazione immersiva a tutto schermo nella Batcaverna. L'utente non sfoglia una scheda prodotto — **vive una missione**. Il Joker ha piazzato una bomba nella Batcaverna: trovare i 5 indizi nei 3 ambienti 360° prima che il tempo scada. La vittoria sblocca l'accesso alla statua e al checkout.
-
----
-
-## User Journey
-
-```
-Intro Joker (briefing cinematografico)
-  → Batcomputer Boot (tutorial sincronizzazione movimento)
-  → Batcomputer Area 360° (2 Joker Cards)
-  → Video Transizione cinematografica
-  → Armeria Area 360° (2 Joker Cards)
-  → Video Transizione cinematografica
-  → BatMobile Area 360° (1 Joker Card)
-  → Breather Screen (missione completata)
-  → Final Reveal (classifica + tempo)
-  → Showreel BatmanCamera (800 frame scroll)
-  → Checkout (form acquisto)
-  → Thank You Page
+```sh
+npm ci
+npm run dev
 ```
 
----
+Per controllare la build pubblicabile:
 
-## Stack Tecnologico
-
-| Tecnologia | Versione | Utilizzo |
-|---|---|---|
-| React | 19 | UI Framework |
-| Vite | 6.4 | Build tool |
-| TypeScript | 5.8 | Type safety |
-| Motion (Framer) | 12 | Animazioni |
-| Three.js | 0.184 | Rendering 360° |
-| React Three Fiber | 9.6 | Three.js React bridge |
-| TailwindCSS | 4.1 | Styling (corrente, in migrazione verso DS Figma) |
-| Lucide React | 0.546 | Icone |
-| Web Audio API | nativa | Audio spaziale Joker |
-| CSS Modules | — | Nuovo DS Figma (Atomic Design) |
-
----
-
-## Avvio Locale
-
-```bash
-npm install
-npm run dev     # porta 3000
-npm run build   # produzione
-npm run lint    # TypeScript check
+```sh
+npm run check
+npm run preview
 ```
 
----
+Aprire l’URL HTTP mostrato dal comando. `file://` non è supportato: Vite produce moduli e chunk. Gli script usano percorsi relativi espliciti per funzionare anche quando la directory del progetto contiene `:`.
 
-## Struttura Progetto
+## Verifiche
 
-```
-src/
-├── App.tsx                    # Orchestratore principale, state machine fasi
-├── main.tsx                   # Entry point React 19
-├── index.css                  # Design system globale + animazioni (AI-generated, in migrazione)
-├── design-system/             # ✨ NUOVO — Design System Figma (Alessandro Bottone)
-│   ├── Atoms.tsx              # Atoms: bottoni, icone, timer, testi, logo, cursore
-│   ├── Atoms.module.css       # CSS Module per gli Atoms
-│   ├── Molecule.tsx           # Molecules: Navbar, Clues, Tutorial, Checkout
-│   ├── Molecule.module.css    # CSS Module per le Molecules
-│   ├── Organisms.tsx          # Organisms: Showreel, Win, Tutorial, ThankYou, Checkout
-│   ├── Organisms.module.css   # CSS Module per gli Organisms
-│   ├── Templates.tsx          # Templates: layout completi per ogni schermata
-│   ├── Templates.modules.css  # CSS Module per i Templates
-│   └── global.css             # Token globali e variabili CSS del Design System
-├── lib/
-│   └── audioManager.ts        # Singleton BatcavernAudio (persistente tra fasi)
-├── hooks/
-│   ├── useAudioSystem.ts      # Sincronizzazione mute con singleton
-│   ├── useMissionTimer.ts     # Timer A/B test (120s gruppo A, 240s gruppo B)
-│   ├── useJokerHint.ts        # Sistema hint progressivo a 3 fasi
-│   └── useMobileDetection.ts  # Rilevamento viewport < 768px
-├── components/
-│   ├── cinematic/
-│   │   ├── IntroScreen.tsx    # Briefing Joker + avvio audio
-│   │   ├── SharedPanoramaCanvas.tsx # Three.js 360° multi-scena
-│   │   ├── BatmanCamera.tsx   # Showreel scroll 800 frame
-│   │   ├── CinematicVideoPlayer.tsx # Transizioni video
-│   │   └── MouseLookControls.tsx    # Controllo panorama da mouse
-│   ├── joker/
-│   │   ├── JokerCard.tsx      # Card indizio (→ migrazione a Clues Molecule DS)
-│   │   ├── JokerHintSystem.tsx # Overlay visivo hint (3 fasi + audio)
-│   │   └── JokerAudioManager.tsx # Risata 3D spaziale (Web Audio API)
-│   ├── hud/
-│   │   ├── MissionTimer.tsx   # Timer (→ migrazione a Timer Atom DS)
-│   │   └── ProgressTracker.tsx # Barre indizi (→ migrazione a Progression Atom DS)
-│   ├── layout/
-│   │   └── Navbar.tsx         # Nav fissa (→ migrazione a Navbar Molecule DS)
-│   ├── showreel/
-│   │   ├── BatmanCamera.tsx   # Showreel scroll-driven 800 frame
-│   │   ├── FinalReveal.tsx    # Risultati missione + leaderboard
-│   │   ├── Checkout.tsx       # Form acquisto (→ migrazione a Checkout Template DS)
-│   │   ├── Features.tsx       # Features statua (non usato in routing attivo)
-│   │   ├── Pricing.tsx        # Pricing (non usato in routing attivo)
-│   │   └── ThankYouPage.tsx   # Conferma (→ migrazione a ThankYou Template DS)
-│   ├── transitions/
-│   │   ├── TransitionOverlay.tsx  # Fade nero tra fasi
-│   │   ├── ExplosionOverlay.tsx   # Game over (missione fallita)
-│   │   └── AssetPreloader.tsx     # Preload assets iniziali
-│   └── ui/
-│       ├── BatcomputerBootOverlay.tsx # Tutorial + sync movimento
-│       ├── BatmanButton.tsx    # Bottone (→ migrazione a Button Atom DS)
-│       ├── BatmanText.tsx      # Testo animato con delay
-│       └── TechBackground.tsx  # Background cyberpunk animato
-public/assets/
-├── audio/
-│   ├── SiglaBatman.wav        # Musica principale (loop persistente)
-│   └── RisataJoker.wav        # Risata Joker (spazializzata 3D)
-├── videos/
-│   ├── BatCaverna360_BatComputerArea.mp4           # (non usato nel routing)
-│   ├── BatCaverna_PassaggioBatComputerAArmeria.mp4 # Transizione 1→2
-│   └── BatCaverna_PassaggioArmeriaABatMobile.mp4   # Transizione 2→3
-├── textures/
-│   ├── BatCaverna360_BatComputerArea.jpg  # Panorama Batcomputer
-│   ├── BatCaverna360_ArmeriaArea.jpg      # Panorama Armeria
-│   └── BatCaverna360_BatMobileArea.jpg    # Panorama BatMobile
-├── images/
-│   ├── JollyJokerCard.jpg     # Fronte carta Joker
-│   ├── JollyJokerCard_Back.jpg # Retro carta Joker
-│   ├── Navbar.png             # Logo navbar
-│   └── batman-cursor.png      # Cursore custom
-    └── showreel/
-        └── 0001–0800.png          # 800 frame 4K (3840×2160), 25 FPS, sfondo trasparente (alpha PNG)
-docs/
-├── README.md (questo file)
-├── DESIGN_SYSTEM.md           # ✨ NUOVO — Design System Figma + stato migrazione
-├── ARCHITECTURE.md            # Struttura tecnica e routing
-├── GAMEPLAY_SYSTEMS.md        # Timer, hint, leaderboard, sistemi di gioco
-├── AUDIO_SYSTEM.md            # Audio singleton e effetti Joker
-├── UI_UX_GUIDELINES.md        # Design language e componenti UI (AI-gen, in aggiornamento)
-├── ASSET_STRUCTURE.md         # Asset completi e formati
-├── CHANGELOG.md               # Storia delle funzionalità
-├── Testi_Sito_Batman_REVISED_v2.docx  # Testi definitivi (sorgente)
-└── Testi_Sito_Batman_REVISED_v2.txt   # Testi definitivi (testo puro)
+```sh
+npm run typecheck
+npm run lint
+npm test
+./node_modules/.bin/playwright install chromium firefox webkit
+npm run test:e2e
+npm audit
 ```
 
----
+Playwright verifica Chromium, Firefox e WebKit; salva screenshot/tracce dei fallimenti in `test-results` e report HTML in `playwright-report`. Per una preview ospitata: `BASE_URL=https://deployment.vercel.app npm run test:e2e`. Non usare dati personali durante le prove. La suite automatica non è una certificazione WCAG né una prova su tutti i dispositivi reali.
 
-## 🔄 Migrazione Design System
+## Percorso e regole
 
-Il progetto sta passando da un design system **AI-generated** (Antigravity) al **Design System ufficiale** progettato dall'autore in Figma, seguendo la metodologia **Atomic Design**.
+- Smartphone e tablet touch: solo avviso desktop, senza avviare audio, video o frame.
+- Desktop: intro → tutorial → Batcomputer (2 indizi) → Armeria (1) → Batmobile (2) → vittoria → statua → checkout demo → esito locale.
+- Mouse ai bordi o frecce per la visuale; Tab e Invio per gli indizi e le risposte; Esc chiude la carta o mette in pausa l’esplorazione.
+- 180 secondi di missione; pausa, caricamento e transizioni video non consumano tempo.
+- Primi due indizi entro 45 secondi: +60 secondi. Missione sotto 90 secondi: `SPEEDRUN15`, valido soltanto nella sessione che lo ha sbloccato.
+- Dopo 60 secondi di ricerca senza una carta aperta, l’hint si attiva; aumenta a 80 e 100 secondi.
+- Un refresh durante la missione ricomincia dall’intro. Nessun progresso o dato del form è persistito.
+- `/#statua` e `/#checkout` aprono le schermate corrispondenti. `/#conferma` richiede un esito valido nella sessione corrente; altrimenti torna alla statua.
+- `prefers-reduced-motion` usa panorami statici, transizioni manuali e una galleria selezionabile della statua.
 
-I file del DS Figma si trovano in `src/design-system/` e coprono l'intera interfaccia dell'experience: atoms (bottoni, timer, icone), molecules (navbar, clue cards), organisms (win screen, tutorial, checkout) e templates (layout completi per ogni schermata).
+## Struttura e asset
 
-Per la documentazione completa della migrazione, vedere [`docs/DESIGN_SYSTEM.md`](./docs/DESIGN_SYSTEM.md).
+React + TypeScript, Vite, Three.js/React Three Fiber per le panoramiche. `src/lib/experience.ts` contiene le transizioni ammesse; `src/lib/checkout.ts` validazione, prezzi demo e premio. Token e componenti visivi sono definiti nell’implementazione corrente: non esiste una cartella `src/design-system` importata da Figma.
 
----
+`public` è la fonte degli asset: 800 WebP numerati 0001–0800 (1536×864), tre MP4 panoramici, due MP4 di transizione, tre fallback JPG estratti dai panorami e file audio. Il renderer dello showreel usa massimo sei richieste concorrenti e conserva al massimo 48 immagini caricate, oltre alle richieste in corso. Gli errori non contano come caricamenti riusciti. I cinque MP4 non vengono scaricati integralmente all’apertura.
 
-## Documentazione Tecnica
+## Pubblicazione
 
-Tutta la documentazione approfondita si trova nella cartella [`/docs`](./docs/).
+Repository: https://github.com/alessandrobottone2005-crypto/BatmanStatueExperience
 
-| File | Descrizione |
-|---|---|
-| [`DESIGN_SYSTEM.md`](./docs/DESIGN_SYSTEM.md) | ✨ Design System Figma — Atomic Design |
-| [`ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | Architettura tecnica e state machine |
-| [`GAMEPLAY_SYSTEMS.md`](./docs/GAMEPLAY_SYSTEMS.md) | Timer, hint, indizi, leaderboard |
-| [`AUDIO_SYSTEM.md`](./docs/AUDIO_SYSTEM.md) | Audio singleton e effetti spaziali |
-| [`UI_UX_GUIDELINES.md`](./docs/UI_UX_GUIDELINES.md) | Design language (in aggiornamento) |
-| [`ASSET_STRUCTURE.md`](./docs/ASSET_STRUCTURE.md) | Asset completi e formati |
-| [`CHANGELOG.md`](./docs/CHANGELOG.md) | Storia delle funzionalità |
+Sito: https://batman-87th-anniversary.vercel.app
 
----
+`dist` è generata e ignorata da Git. Vercel esegue `npm ci` e `npm run build`, pubblicando `dist`. Le pubblicazioni automatiche di `main` e del vecchio `preview/draft-review` sono disattivate nella configurazione del repository per consentire il rilascio controllato: preview del branch → test → merge → produzione senza assegnazione dominio → verifiche → promozione. Prima di rilasciare verificare account, progetto, commit e deployment precedente per rollback.
 
-## Licenza
+## Documentazione
 
-Uso accademico / dimostrativo — IUAD, Corso UI/UX Design.  
-Non destinato alla vendita. DC Comics / Batman è proprietà di Warner Bros. / DC Entertainment.
+- [Architettura](docs/ARCHITECTURE.md)
+- [Sistema visivo](docs/DESIGN_SYSTEM.md)
+- [Gameplay](docs/GAMEPLAY_SYSTEMS.md)
+- [Asset](docs/ASSET_STRUCTURE.md)
+- [Strumenti](scripts/README.md)
+- [Stato audit](docs/AUDIT_REMEDIATION.md)
 
-## Deployment
-
-Sito pubblicato su Vercel: https://batman-87th-anniversary.vercel.app
-
-Branch di lavoro: `preview/draft-review` (bozza per revisione, non definitiva).
+I documenti in `docs/history` conservano le specifiche precedenti: non descrivono il funzionamento corrente. La fedeltà al file Figma originale non è certificata da questa revisione. I marchi e i personaggi rappresentati appartengono ai rispettivi titolari; il progetto ha finalità accademiche e non implica affiliazione commerciale.
