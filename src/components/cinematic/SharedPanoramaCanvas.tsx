@@ -156,6 +156,9 @@ export default function SharedPanoramaCanvas({
         true,
       );
   }, [onReady]);
+  useEffect(() => {
+    onReady?.(!loading && graphics === "available" && !contextLost && !failed);
+  }, [loading, graphics, contextLost, failed, onReady]);
   const video = useRef<HTMLVideoElement | null>(null);
   const reduced = !!useReducedMotion();
   const riddles =
@@ -197,7 +200,6 @@ export default function SharedPanoramaCanvas({
       tex.generateMipmaps = false;
       setTexture(tex);
       setLoading(false);
-      onReady?.(true);
     };
     const nextScene =
       scene === "batcomputer"

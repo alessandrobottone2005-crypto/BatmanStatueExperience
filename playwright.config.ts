@@ -4,7 +4,7 @@ export default defineConfig({
   timeout: 60000,
   expect: { timeout: 15000 },
   fullyParallel: false,
-  workers: 2,
+  workers: process.env.CI ? 1 : 2,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: process.env.BASE_URL || "http://127.0.0.1:4173",
@@ -14,7 +14,18 @@ export default defineConfig({
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
+    {
+      name: "firefox",
+      use: {
+        ...devices["Desktop Firefox"],
+        launchOptions: {
+          firefoxUserPrefs: {
+            "webgl.force-enabled": true,
+            "webgl.enable-webgl2": true,
+          },
+        },
+      },
+    },
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
   ],
   webServer: process.env.BASE_URL

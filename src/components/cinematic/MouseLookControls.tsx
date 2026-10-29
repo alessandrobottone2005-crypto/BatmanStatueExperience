@@ -59,10 +59,11 @@ export function MouseLookControls({
     // Let a partly clipped card enter the viewport before holding the camera.
     if (
       bounds &&
-      bounds.left >= 0 &&
-      bounds.right <= innerWidth &&
-      bounds.top >= 94 &&
-      bounds.bottom <= innerHeight
+      (Math.abs(pointer.current.x) < 0.98 ||
+        (bounds.left >= 0 &&
+          bounds.right <= innerWidth &&
+          bounds.top >= 94 &&
+          bounds.bottom <= innerHeight))
     )
       return;
     const speed = (n: number) =>
