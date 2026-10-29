@@ -1,6 +1,6 @@
 # Audit — registro di correzione
 
-29 ottobre 2026. Riferimento: audit della revisione `3df7920`, 33 rilievi. Il checkout resta una demo locale; il mobile è escluso per scelta dell’autore. Questo registro descrive gli interventi; il riepilogo di esecuzione dei controlli sarà aggiornato prima del rilascio.
+29 ottobre 2026. Riferimento: audit della revisione `3df7920`, 33 rilievi. Il checkout resta una demo locale; il mobile è escluso per scelta dell’autore. Questo registro descrive gli interventi; gli esiti di esecuzione per ciascuna revisione sono tracciati nel [workflow Quality and browser regression](https://github.com/alessandrobottone2005-crypto/BatmanStatueExperience/actions/workflows/quality.yml) e nel report conclusivo di consegna.
 
 | ID | Intervento | Evidenza prevista |
 |---|---|---|
@@ -41,3 +41,9 @@
 ## Limiti
 
 La suite non certifica WCAG, sicurezza del servizio o prestazioni su ogni GPU/dispositivo. Il blocco mobile è una politica client basata su puntatore e segnali dispositivo, non una misura di sicurezza. Le prove di guasto sono simulate e le viewport equivalenti allo zoom non sostituiscono una prova manuale con tutte le tecnologie assistive. Il chunk Three.js resta significativo ma viene caricato soltanto entrando nella missione.
+
+## Procedura di accettazione
+
+`npm ci`, `npm run check` (TypeScript strict, ESLint, sei test unitari e build) e `npm audit` sono stati eseguiti. La suite browser contiene 17 scenari, eseguiti su Chromium, Firefox e WebKit: 51 controlli per revisione. Il workflow Linux usa un display Xvfb, browser headed e un solo worker per verificare realmente WebGL con rendering software. I test non sostituiscono la scena con un renderer fittizio.
+
+La preview Vercel viene verificata separatamente; la toolbar di collaborazione della piattaforma è isolata dai controlli dell’applicazione. La produzione viene preparata senza assegnazione del dominio, verificata e promossa soltanto dopo i controlli. Il report di consegna include revisioni, URL, risultati e limiti effettivi.

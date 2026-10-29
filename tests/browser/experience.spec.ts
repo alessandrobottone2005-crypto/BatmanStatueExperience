@@ -350,7 +350,18 @@ test("mouse exploration can find all five cards in the panoramas", async ({
     }
     expect(point, `indizio ${id} visibile dopo la rotazione`).not.toBeNull();
     await page.mouse.move(point!.x, point!.y);
-    await card.click({ timeout: 5000 });
+    // A projected 3D control has no document scroll position. Use real pointer
+    // input at its visible hit-tested center, without DOM scrollIntoView.
+    await page.waitForTimeout(100);
+    const hit = await card.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const x = r.x + r.width / 2,
+        y = r.y + r.height / 2;
+      const top = document.elementFromPoint(x, y);
+      return top && el.contains(top) ? { x, y } : null;
+    });
+    expect(hit, `indizio ${id} sotto il puntatore`).not.toBeNull();
+    await page.mouse.click(hit!.x, hit!.y);
     await page
       .getByRole("button", { name: responses[id - 1], exact: true })
       .click();
