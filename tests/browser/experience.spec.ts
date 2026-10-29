@@ -353,15 +353,25 @@ test("mouse exploration can find all five cards in the panoramas", async ({
       }
     }
     expect(point, `indizio ${id} visibile dopo la rotazione`).not.toBeNull();
-    await page.mouse.move(point!.x, point!.y);
-    // A projected 3D control has no document scroll position. Use real pointer
-    // input at its visible hit-tested center, without DOM scrollIntoView.
-    await page.evaluate(
-      () =>
-        new Promise<void>((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-        }),
-    );
+    // Follow the visible target until hovering has stopped the camera. On a
+    // software renderer a round trip can take several frames, so coordinates
+    // sampled while rotating are not yet a stable click target.
+    await expect(async () => {
+      const rect = await card.boundingBox();
+      expect(rect).not.toBeNull();
+      await page.mouse.move(
+        rect!.x + rect!.width / 2,
+        rect!.y + rect!.height / 2,
+      );
+      await expect(card).toBeVisible();
+      const hovering = await card.evaluate((el) => el.matches(":hover"));
+      expect(hovering).toBe(true);
+      await page.waitForTimeout(150);
+      const settled = await card.boundingBox();
+      expect(settled).not.toBeNull();
+      expect(Math.abs(settled!.x - rect!.x)).toBeLessThan(1);
+      expect(Math.abs(settled!.y - rect!.y)).toBeLessThan(1);
+    }).toPass({ timeout: 15000, intervals: [100, 150, 200] });
     const hit = await card.evaluate((el) => {
       const r = el.getBoundingClientRect();
       const x = r.x + r.width / 2,

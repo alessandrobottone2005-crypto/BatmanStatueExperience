@@ -1,7 +1,7 @@
 name: Quality and browser regression
 on:
   push:
-    branches: [main, codex/audit-remediation]
+    branches: [main]
   pull_request:
 concurrency:
   group: quality-${{ github.head_ref || github.ref_name }}
