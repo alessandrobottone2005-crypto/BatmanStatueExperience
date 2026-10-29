@@ -141,15 +141,19 @@ test("statue paints before scroll and handles missing frames", async ({
   await expect(
     page.getByText("Preparazione del primo fotogramma…"),
   ).toHaveCount(0);
-  const painted = await page
-    .locator("canvas")
-    .evaluate((c: HTMLCanvasElement) => {
-      const data = c
-        .getContext("2d")!
-        .getImageData(0, 0, c.width, c.height).data;
-      return data.some((v, i) => i % 4 === 3 && v > 0);
-    });
-  expect(painted).toBe(true);
+  await expect(page.locator("canvas")).toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        page.locator("canvas").evaluate((c: HTMLCanvasElement) => {
+          const data = c
+            .getContext("2d")!
+            .getImageData(0, 0, c.width, c.height).data;
+          return data.some((value, index) => index % 4 === 3 && value > 0);
+        }),
+      { message: "La statua deve essere dipinta senza alcuno scroll" },
+    )
+    .toBe(true);
   await page.screenshot({ path: test.info().outputPath("statue-initial.png") });
   await page.evaluate(() => scrollTo(0, document.body.scrollHeight / 2));
   await expect(page.locator("canvas")).toBeVisible();
