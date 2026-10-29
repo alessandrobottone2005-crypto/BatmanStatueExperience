@@ -139,6 +139,23 @@ export default function SharedPanoramaCanvas({
     }
   }, [retry]);
   const [feedback, setFeedback] = useState("");
+  useEffect(() => {
+    const failedCreation = () => {
+      onReady?.(false);
+      setContextLost(true);
+    };
+    document.addEventListener(
+      "webglcontextcreationerror",
+      failedCreation,
+      true,
+    );
+    return () =>
+      document.removeEventListener(
+        "webglcontextcreationerror",
+        failedCreation,
+        true,
+      );
+  }, [onReady]);
   const video = useRef<HTMLVideoElement | null>(null);
   const reduced = !!useReducedMotion();
   const riddles =

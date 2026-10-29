@@ -195,13 +195,31 @@ export default function BatmanCamera({
             ))}
           </div>
           <button onClick={onPreorder}>Esplora il checkout demo</button>
+          {failed && (
+            <div role="status">
+              <p>
+                Immagine non disponibile. Puoi riprovare o proseguire con la
+                demo.
+              </p>
+              <button
+                className="secondary"
+                onClick={() => {
+                  setFailed(false);
+                  setRetry((r) => r + 1);
+                }}
+              >
+                Riprova immagine
+              </button>
+            </div>
+          )}
         </div>
         <img
-          src={source(gallery)}
+          src={source(gallery) + (retry ? `?retry=${retry}` : "")}
           alt={`Statua Batman, vista ${[1, 200, 400, 600, 800].indexOf(gallery) + 1}`}
-          onError={(e) => {
-            if (!e.currentTarget.src.endsWith("0001.webp"))
-              e.currentTarget.src = source(1);
+          onLoad={() => setFailed(false)}
+          onError={() => {
+            if (gallery !== 1) setGallery(1);
+            else setFailed(true);
           }}
         />
       </section>

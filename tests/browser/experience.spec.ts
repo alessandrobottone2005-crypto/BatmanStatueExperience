@@ -1,5 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+// Vercel injects its collaboration toolbar into previews. Isolate application
+// behavior from that platform UI; unknown application POSTs still fail the test.
+test.beforeEach(async ({ page }) => {
+  await page.route("https://vercel.live/**", (route) => route.abort());
+});
 async function start(page: Page) {
   await page.goto("/");
   const skip = page.getByRole("button", { name: "Salta intro" });
@@ -494,4 +499,49 @@ test("mute reaches existing music and prevents riddle beeps", async ({
       () => (window as unknown as { __beeps: number }).__beeps,
     ),
   ).toBe(1);
+});
+
+test("showreel caps concurrent frame requests and reports complete media failure", async ({
+  page,
+}) => {
+  let active = 0,
+    maximum = 0;
+  await page.route("**/assets/showreel/*.webp", async (route) => {
+    active++;
+    maximum = Math.max(maximum, active);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    try {
+      await route.fulfill({ response: await route.fetch() });
+    } finally {
+      active--;
+    }
+  });
+  await page.goto("/#statua");
+  await expect(
+    page.getByText("Preparazione del primo fotogramma…"),
+  ).toHaveCount(0);
+  for (const position of [1500, 3500, 5000]) {
+    await page.evaluate((y) => scrollTo(0, y), position);
+    await page.waitForTimeout(150);
+  }
+  expect(maximum).toBeLessThanOrEqual(6);
+  expect(maximum).toBeGreaterThan(0);
+  await page.unroute("**/assets/showreel/*.webp");
+  await page.route("**/assets/showreel/**", (route) => route.abort());
+  await page.reload();
+  await expect(
+    page.getByText(
+      "Sequenza non disponibile. Puoi riprovare o proseguire con la demo.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Riprova", exact: true }),
+  ).toBeVisible();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload();
+  await expect(
+    page.getByText(
+      "Immagine non disponibile. Puoi riprovare o proseguire con la demo.",
+    ),
+  ).toBeVisible();
 });
