@@ -1,58 +1,51 @@
-import { motion } from "motion/react";
-
+import { useState } from "react";
+const INFO = {
+  progetto: [
+    "Il progetto",
+    "Batman 87th Anniversary è un progetto accademico di Alessandro Bottone. Racconta una statua da collezione attraverso una missione nella Batcaverna. Non è un negozio e non è affiliato commercialmente ai marchi rappresentati.",
+  ],
+  privacy: [
+    "Dati della demo",
+    "Il form è una simulazione locale: i dati non vengono inviati, salvati in storage o utilizzati per creare ordini. Usa soltanto dati fittizi. Il servizio di hosting può trattare i normali dati tecnici delle richieste secondo le proprie condizioni. Questo progetto non integra strumenti di analytics o marketing.",
+  ],
+  acquisto: [
+    "Acquisto e assistenza",
+    "Prezzi, spedizione e premio speedrun sono dimostrativi. Non avvengono addebiti, vendite o spedizioni; non sono disponibili resi o chat commerciale.",
+  ],
+};
 export default function Footer() {
+  const [open, setOpen] = useState<keyof typeof INFO | null>(null);
   return (
-    <footer id="footer" className="bg-[#080808] py-20 px-10 border-t border-white/5 relative overflow-hidden">
-       {/* Tactical Footer Overlay */}
-      <div className="absolute inset-0 pointer-events-none opacity-5" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
-      
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start gap-12 relative z-10">
-        <div className="flex flex-col gap-8">
-          <div className="flex items-center gap-3">
-             <img src="./assets/images/LogoSideshow.png" alt="Sideshow" className="h-10 w-auto object-contain" loading="lazy" decoding="async" />
-          </div>
-          <p className="text-white/20 max-w-sm tracking-[0.2em] text-[10px] uppercase font-bold leading-relaxed">
-            Partner di Produzione della Wayne Enterprises. <br />
-            Sicurezza Tattica per il Guardiano Moderno.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-16">
-          <div className="flex flex-col gap-6">
-            <h4 className="text-white font-bold text-[10px] uppercase tracking-[0.3em] mb-2 text-gold">Componenti</h4>
-            <a href="#" onClick={(e) => e.preventDefault()} className="text-white/30 hover:text-white transition-colors text-[10px] font-bold uppercase tracking-widest">Bat_Suit_Mk_I</a>
-            <a href="#" onClick={(e) => e.preventDefault()} className="text-white/30 hover:text-white transition-colors text-[10px] font-bold uppercase tracking-widest">Utility_Belt_Alpha</a>
-            <a href="#" onClick={(e) => e.preventDefault()} className="text-white/30 hover:text-white transition-colors text-[10px] font-bold uppercase tracking-widest">Equip_Rack</a>
-          </div>
-          <div className="flex flex-col gap-6">
-             <h4 className="text-white font-bold text-[10px] uppercase tracking-[0.3em] mb-2 text-gold">Protocolli</h4>
-            <a href="#" onClick={(e) => e.preventDefault()} className="text-white/30 hover:text-white transition-colors text-[10px] font-bold uppercase tracking-widest">Sideshow_Net</a>
-            <a href="#" onClick={(e) => e.preventDefault()} className="text-white/30 hover:text-white transition-colors text-[10px] font-bold uppercase tracking-widest">Privacy_Dati</a>
-            <a href="#" onClick={(e) => e.preventDefault()} className="text-white/30 hover:text-white transition-colors text-[10px] font-bold uppercase tracking-widest">Linea_Supporto</a>
-          </div>
-          <div className="flex flex-col gap-6">
-             <h4 className="text-white font-bold text-[10px] uppercase tracking-[0.3em] mb-2 text-gold">Connettiti</h4>
-            <a href="#" onClick={(e) => e.preventDefault()} className="text-white/30 hover:text-white transition-colors text-[10px] font-bold uppercase tracking-widest">IG: Sideshow</a>
-            <a href="#" onClick={(e) => e.preventDefault()} className="text-white/30 hover:text-white transition-colors text-[10px] font-bold uppercase tracking-widest">X: Bat_Sideshow</a>
-          </div>
-        </div>
+    <footer className="site-footer">
+      <div>
+        <p className="eyebrow">BATMAN / ANNIVERSARY EXPERIENCE</p>
+        <p>
+          Una leggenda. Un’esperienza.
+          <br />
+          Progetto accademico di Alessandro Bottone.
+        </p>
       </div>
-
-      <div className="max-w-7xl mx-auto mt-20 pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 relative z-10">
-        <span className="text-white/10 text-[9px] tracking-[0.4em] uppercase font-mono">
-          © 2026 SIDESHOW | DISTRETTO_DI_GOTHAM
-        </span>
-        <div className="flex items-center gap-6">
-           <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
-              <span className="text-white/30 text-[9px] tracking-widest uppercase font-mono">AES-256 BIT</span>
-           </div>
-           <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#FFD700] shadow-[0_0_8px_#FFD700]" />
-              <span className="text-white/30 text-[9px] tracking-widest uppercase font-mono">LINK: OPERATIVO</span>
-           </div>
-        </div>
+      <div className="footer-links">
+        {Object.entries(INFO).map(([key, [title]]) => (
+          <button
+            key={key}
+            className="text-button"
+            aria-expanded={open === key}
+            onClick={() =>
+              setOpen(open === key ? null : (key as keyof typeof INFO))
+            }
+          >
+            {title}
+          </button>
+        ))}
       </div>
+      {open && (
+        <section className="footer-info" aria-live="polite">
+          <h2>{INFO[open][0]}</h2>
+          <p>{INFO[open][1]}</p>
+        </section>
+      )}
+      <p className="caption">2026 · Demo interattiva · Nessuna vendita reale</p>
     </footer>
   );
 }

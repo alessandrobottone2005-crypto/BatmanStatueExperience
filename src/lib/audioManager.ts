@@ -1,157 +1,182 @@
-/**
- * BatcavernAudioManager — Singleton globale persistente
- *
- * Vive a livello di modulo, completamente fuori dal ciclo di vita React.
- * Una sola istanza Audio esiste per tutta la durata della sessione.
- * Sopravvive a qualsiasi re-render, cambio di fase, Strict Mode di React.
- *
- * Regole fondamentali:
- * - Non chiamare mai .pause() o .stop() durante i cambi di schermata
- * - Non creare nuove istanze: _audio è creato una volta sola
- * - Il loop è gestito dall'HTMLAudioElement nativo (gapless)
- */
-
-const AUDIO_SRC = "./assets/audio/SiglaBatman.wav";
-const TARGET_VOLUME = 0.45;
-const FADE_IN_DURATION_MS = 2000; // 2 secondi di fade-in morbido
-
-// ── Stato interno del singleton ────────────────────────────────────────────
-
-let _audio: HTMLAudioElement | null = null;
-let _started = false;          // true dopo la prima chiamata a start()
-let _fadeRafId: number | null = null; // requestAnimationFrame per il fade
-
-// ── Crea l'istanza Audio una sola volta ───────────────────────────────────
-
-function _getInstance(): HTMLAudioElement {
-  if (_audio) return _audio;
-
-  _audio = new Audio(AUDIO_SRC);
-  _audio.loop = true;
-  _audio.volume = 0;
-  _audio.preload = "auto";
-
-  // Il loop nativo (audio.loop = true) gestisce la transizione in modo seamless nei browser moderni.
-
-  return _audio;
-}
-
-// ── Fade-in fluido tramite requestAnimationFrame ──────────────────────────
-
-function _cancelFade() {
-  if (_fadeRafId !== null) {
-    cancelAnimationFrame(_fadeRafId);
-    _fadeRafId = null;
+// All sound uses the same mute/pause policy; nothing loads before a user action.
+let music: HTMLAudioElement | null = null;
+let muted = false,
+  paused = false;
+let context: AudioContext | null = null;
+let master: GainNode | null = null;
+const sources = new Set<AudioScheduledSourceNode>();
+const clips = new Set<HTMLAudioElement>();
+let laughBuffer: AudioBuffer | null = null;
+function graph() {
+  if (!context) {
+    context = new AudioContext();
+    master = context.createGain();
+    master.connect(context.destination);
   }
+  master!.gain.value = muted || paused ? 0 : 1;
+  if (!paused) void context.resume().catch(() => {});
+  return { ctx: context, gain: master! };
 }
-
-function _fadeInRAF(
-  startVolume: number,
-  targetVolume: number,
-  durationMs: number
-): void {
-  _cancelFade();
-  if (!_audio) return;
-
-  const startTime = performance.now();
-  const delta = targetVolume - startVolume;
-
-  const tick = (now: number) => {
-    if (!_audio) return;
-    const elapsed = now - startTime;
-    const progress = Math.min(elapsed / durationMs, 1);
-    // Curva ease-out per un fade più naturale
-    const eased = 1 - Math.pow(1 - progress, 3);
-    // Clamp a [0, 1]: la floating-point math può produrre valori leggermente < 0
-    _audio.volume = Math.max(0, Math.min(1, startVolume + delta * eased));
-
-    if (progress < 1) {
-      _fadeRafId = requestAnimationFrame(tick);
-    } else {
-      _fadeRafId = null;
-    }
-  };
-
-  _fadeRafId = requestAnimationFrame(tick);
+function sync() {
+  if (music) {
+    music.muted = muted;
+    if (paused) music.pause();
+    else void music.play().catch(() => {});
+  }
+  for (const clip of clips) {
+    clip.muted = muted;
+    if (paused) clip.pause();
+    else void clip.play().catch(() => {});
+  }
+  if (master && context)
+    master.gain.setValueAtTime(muted || paused ? 0 : 1, context.currentTime);
+  if (context)
+    void (paused ? context.suspend() : context.resume()).catch(() => {});
 }
-
-// ── API pubblica ──────────────────────────────────────────────────────────
-
 export const BatcavernAudio = {
-  /**
-   * Precaricare l'audio appena possibile senza riprodurlo.
-   * Da chiamare al mount dell'app per minimizzare la latenza.
-   */
-  preload(): void {
-    _getInstance();
+  preload() {},
+  start(_fade?: number) {
+    if (muted || paused) return;
+    if (!music) {
+      music = new Audio("/assets/audio/SiglaBatman.wav");
+      music.loop = true;
+      music.volume = 0.3;
+    }
+    void music.play().catch(() => {});
   },
-
-  /**
-   * Avvia la traccia con fade-in morbido.
-   * Se è già in riproduzione, non fa nulla (idempotente).
-   * Gestisce automaticamente la autoplay policy dei browser moderni.
-   */
-  start(fadeDurationMs: number = FADE_IN_DURATION_MS): void {
-    if (_started) return;
-    _started = true;
-
-    const audio = _getInstance();
-    audio.currentTime = 0;
-    audio.volume = 0;
-
-    const doPlay = () => {
-      audio
-        .play()
-        .then(() => {
-          _fadeInRAF(0, TARGET_VOLUME, fadeDurationMs);
-        })
-        .catch(() => {
-          // Autoplay bloccato: aspettiamo la prima interazione utente
-          _started = false; // permettiamo un retry
-        });
+  setMuted(value: boolean) {
+    muted = value;
+    sync();
+  },
+  setPaused(value: boolean) {
+    paused = value;
+    sync();
+  },
+  isPlaying() {
+    return !!music && !music.paused;
+  },
+  getInstance() {
+    return music;
+  },
+  beep(frequency: number, type: OscillatorType = "sine", duration = 0.25) {
+    if (muted || paused) return;
+    try {
+      const { ctx, gain } = graph();
+      const oscillator = ctx.createOscillator();
+      const envelope = ctx.createGain();
+      oscillator.type = type;
+      oscillator.frequency.value = frequency;
+      envelope.gain.setValueAtTime(0.08, ctx.currentTime);
+      envelope.gain.exponentialRampToValueAtTime(
+        0.001,
+        ctx.currentTime + duration,
+      );
+      oscillator.connect(envelope);
+      envelope.connect(gain);
+      sources.add(oscillator);
+      oscillator.onended = () => {
+        sources.delete(oscillator);
+        oscillator.disconnect();
+        envelope.disconnect();
+      };
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + duration);
+    } catch {
+      /* Audio is optional. */
+    }
+  },
+  clip(src: string) {
+    if (muted || paused) return () => {};
+    const clip = new Audio(src);
+    clip.volume = 0.16;
+    clips.add(clip);
+    clip.onended = () => clips.delete(clip);
+    void clip.play().catch(() => clips.delete(clip));
+    return () => {
+      clip.pause();
+      clip.removeAttribute("src");
+      clip.load();
+      clips.delete(clip);
     };
-
-    doPlay();
-
-    // Fallback per autoplay bloccato: appena l'utente tocca qualcosa
-    const unlockAndStart = () => {
-      if (_started && _audio && !_audio.paused) return;
-      _started = true;
-      doPlay();
-      document.removeEventListener("click", unlockAndStart, { capture: true });
-      document.removeEventListener("keydown", unlockAndStart, {
-        capture: true,
-      });
-      document.removeEventListener("touchstart", unlockAndStart, {
-        capture: true,
-      });
+  },
+  spatialLaugh() {
+    let cancelled = false;
+    let source: AudioBufferSourceNode | null = null;
+    const nodes: AudioNode[] = [];
+    void (async () => {
+      try {
+        const { ctx, gain } = graph();
+        if (!laughBuffer) {
+          const response = await fetch("/assets/audio/RisataJoker.wav");
+          if (!response.ok) return;
+          laughBuffer = await ctx.decodeAudioData(await response.arrayBuffer());
+        }
+        if (cancelled || muted || paused || ctx.state === "closed") return;
+        source = ctx.createBufferSource();
+        source.buffer = laughBuffer;
+        source.playbackRate.value = 0.62 + Math.random() * 0.13;
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.value = 700 + Math.random() * 1400;
+        const pan = ctx.createStereoPanner();
+        pan.pan.value = (Math.random() * 2 - 1) * 0.88;
+        const volume = ctx.createGain();
+        volume.gain.value = 0.14;
+        const delay = ctx.createDelay(2);
+        delay.delayTime.value = 0.45;
+        const echo = ctx.createGain();
+        echo.gain.value = 0.3;
+        source.connect(filter);
+        filter.connect(pan);
+        pan.connect(volume);
+        volume.connect(gain);
+        volume.connect(delay);
+        delay.connect(echo);
+        echo.connect(gain);
+        nodes.push(filter, pan, volume, delay, echo);
+        sources.add(source);
+        const current = source;
+        source.onended = () => {
+          sources.delete(current);
+          current.disconnect();
+          for (const node of nodes) node.disconnect();
+        };
+        source.start();
+      } catch {
+        /* Optional audio must never block a scene. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      try {
+        source?.stop();
+      } catch {
+        /* Already ended. */
+      }
     };
-
-    document.addEventListener("click", unlockAndStart, { capture: true });
-    document.addEventListener("keydown", unlockAndStart, { capture: true });
-    document.addEventListener("touchstart", unlockAndStart, { capture: true });
   },
-
-  /**
-   * Aggiorna lo stato muted senza interrompere la riproduzione.
-   */
-  setMuted(muted: boolean): void {
-    const audio = _getInstance();
-    audio.muted = muted;
+  stop() {
+    music?.pause();
+    music?.removeAttribute("src");
+    music?.load();
+    music = null;
+    for (const clip of clips) {
+      clip.pause();
+      clip.removeAttribute("src");
+      clip.load();
+    }
+    clips.clear();
+    for (const source of sources) {
+      try {
+        source.stop();
+      } catch {
+        /* Already ended. */
+      }
+    }
+    sources.clear();
+    if (context) void context.close().catch(() => {});
+    laughBuffer = null;
+    context = null;
+    master = null;
   },
-
-  /**
-   * Ritorna true se la traccia è in riproduzione.
-   */
-  isPlaying(): boolean {
-    return _audio !== null && !_audio.paused;
-  },
-
-  /**
-   * Accesso diretto all'istanza (solo per debug / lettura volume).
-   * Non usare per pause/stop.
-   */
-  getInstance(): HTMLAudioElement | null {
-    return _audio;
-  },
-} as const;
+};

@@ -1,16 +1,14 @@
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { PerspectiveCamera, Html } from "@react-three/drei";
-import { MouseLookControls } from "./MouseLookControls";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useReducedMotion } from "motion/react";
 import * as THREE from "three";
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { MouseLookControls } from "./MouseLookControls";
 import JokerCard from "../joker/JokerCard";
-import { useJokerHint } from "../../hooks/useJokerHint";
 import JokerHintSystem from "../joker/JokerHintSystem";
-
+import { useJokerHint } from "../../hooks/useJokerHint";
 export type PanoramaScene = "batcomputer" | "armeria" | "batmobile";
-
-interface SharedPanoramaCanvasProps {
+interface Props {
   scene: PanoramaScene;
   onProgress: (count: number) => void;
   baseCompleted: number;
@@ -18,611 +16,388 @@ interface SharedPanoramaCanvasProps {
   onNext: () => void;
   isMuted?: boolean;
   isMissionActive?: boolean;
+  onReady?: (ready: boolean) => void;
+  onExit?: () => void;
 }
-
 const BATCOMPUTER_RIDDLES = [
-  { id: 1, riddle: "Non è un uomo, non è un mostro, non è un re… eppure tutta Gotham trattiene il fiato quando compare nel cielo notturno.", options: ["Joker", "Batsegnale", "Pinguino", "Arkham"], correctAnswer: "Batsegnale" },
-  { id: 2, riddle: "Porto un sorriso eterno, ma non ho mai conosciuto la gioia. Più rido… più Gotham brucia.", options: ["Due Facce", "Robin", "Joker", "Enigmista"], correctAnswer: "Joker" },
+  {
+    id: 1,
+    riddle:
+      "Non è un uomo, non è un mostro, non è un re… eppure tutta Gotham trattiene il fiato quando compare nel cielo notturno.",
+    options: ["Joker", "Batsegnale", "Pinguino", "Arkham"],
+    correctAnswer: "Batsegnale",
+  },
+  {
+    id: 2,
+    riddle:
+      "Porto un sorriso eterno, ma non ho mai conosciuto la gioia. Più rido… più Gotham brucia.",
+    options: ["Due Facce", "Robin", "Joker", "Enigmista"],
+    correctAnswer: "Joker",
+  },
 ];
-const ARMERIA_RIDDLE = { id: 3, riddle: "Non ho poteri sovrumani, eppure i criminali tremano al mio nome. Le tenebre sono il mio dominio.", options: ["Superman", "Batman", "Bane", "Flash"], correctAnswer: "Batman" };
+const ARMERIA_RIDDLE = {
+  id: 3,
+  riddle:
+    "Non ho poteri sovrumani, eppure i criminali tremano al mio nome. Le tenebre sono il mio dominio.",
+  options: ["Superman", "Batman", "Bane", "Flash"],
+  correctAnswer: "Batman",
+};
 const BATMOBILE_RIDDLES = [
-  { id: 4, riddle: "DIVORO L'ASFALTO DI GOTHAM A VELOCITÀ IMPOSSIBILI. LASCIO SOLO FUMO E TERRORE. COSA SONO?", options: ["Batwing", "Batmobile", "Joker Van", "Treno di Gotham"], correctAnswer: "Batmobile" },
-  { id: 5, riddle: "RUGGIO NELL’OSCURITÀ DI GOTHAM, IL CUORE PULSANTE DELLA MACCHINA DEL CAVALIERE. COSA SONO?", options: ["Reattore", "Turbina", "Pistone"], correctAnswer: "Reattore" },
+  {
+    id: 4,
+    riddle:
+      "DIVORO L'ASFALTO DI GOTHAM A VELOCITÀ IMPOSSIBILI. LASCIO SOLO FUMO E TERRORE. COSA SONO?",
+    options: ["Batwing", "Batmobile", "Joker Van", "Treno di Gotham"],
+    correctAnswer: "Batmobile",
+  },
+  {
+    id: 5,
+    riddle:
+      "RUGGIO NELL’OSCURITÀ DI GOTHAM, IL CUORE PULSANTE DELLA MACCHINA DEL CAVALIERE. COSA SONO?",
+    options: ["Reattore", "Turbina", "Pistone"],
+    correctAnswer: "Reattore",
+  },
 ];
 
-function PanoramaSphere({ texture, onClick }: { texture: THREE.Texture, onClick?: () => void }) {
-  // Configura la texture per limitare al massimo la sgranatura nei limiti della risoluzione
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.generateMipmaps = false; 
-
-  return (
-    <mesh key={texture.uuid} scale={[-1, 1, 1]} rotation={[0, -Math.PI / 2, 0]} onClick={onClick}>
-      <sphereGeometry args={[500, 128, 128]} />
-      <meshBasicMaterial map={texture} side={THREE.BackSide} />
-    </mesh>
-  );
-}
-
-interface ClueMeshProps {
+const ARMERIA_RIDDLES = [ARMERIA_RIDDLE];
+const MEDIA = {
+  batcomputer: "BatCaverna_Batcomputer360",
+  armeria: "BatCaverna_Armeria360",
+  batmobile: "BatCaverna_BatMobile360",
+};
+const POSITIONS: Record<PanoramaScene, [number, number, number][]> = {
+  batcomputer: [
+    [190, -30, 60],
+    [-160, -20, 120],
+  ],
+  armeria: [[170, 40, -100]],
+  batmobile: [
+    [-180, -10, 80],
+    [120, 30, -170],
+  ],
+};
+function Clue({
+  position,
+  id,
+  hint,
+  onOpen,
+  disabled,
+}: {
   position: [number, number, number];
-  riddle: any;
-  onClick: () => void;
-  isCompleted: boolean;
-  isActive: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
-  isPaused: boolean;
-  hoveredCountRef: React.MutableRefObject<number>;
-  isHintActive: boolean;
-  hintPhase: number;
-  onBecomeVisible: (id: number) => void;
-}
-
-function ClueMesh({ position, riddle, onClick, isCompleted, isActive, onClose, onSuccess, isPaused, hoveredCountRef, isHintActive, hintPhase, onBecomeVisible }: ClueMeshProps) {
-  const [hovered, setHovered] = useState(false);
-  const [isFlyingAway, setIsFlyingAway] = useState(false);
-  const meshRef = useRef<THREE.Group>(null);
-  const targetWorldPos = useRef(new THREE.Vector3());
-  const becameVisibleRef = useRef(false);
-
-  useEffect(() => {
-    const shouldCount = hovered && !isCompleted;
-    if (shouldCount && hoveredCountRef) {
-      hoveredCountRef.current += 1;
-    }
-    return () => {
-      if (shouldCount && hoveredCountRef) {
-        hoveredCountRef.current = Math.max(0, hoveredCountRef.current - 1);
-      }
-    };
-  }, [hovered, isCompleted, hoveredCountRef]);
-
-  useEffect(() => {
-    if (meshRef.current && !isActive && position) {
-      meshRef.current.position.set(...position);
-      meshRef.current.lookAt(0, 0, 0);
-      meshRef.current.scale.setScalar(0.4);
-    }
-  }, [position, isActive]);
-
-  // Notifica quando la card con hint diventa visibile nella scena
-  useEffect(() => {
-    if (isHintActive && !becameVisibleRef.current && onBecomeVisible) {
-      becameVisibleRef.current = true;
-      onBecomeVisible(riddle.id);
-    }
-    if (!isHintActive) becameVisibleRef.current = false;
-  }, [isHintActive, riddle.id, onBecomeVisible]);
-
-  useFrame((state, delta) => {
-    if (!meshRef.current || isCompleted || (state as any).isPaused || !position) return;
-    if (isActive) {
-      const dir = state.camera.getWorldDirection(new THREE.Vector3());
-      targetWorldPos.current.copy(state.camera.position).add(dir.multiplyScalar(60));
-      meshRef.current.position.lerp(targetWorldPos.current, delta * 5);
-      meshRef.current.quaternion.slerp(state.camera.quaternion, delta * 5);
-      meshRef.current.scale.lerp(new THREE.Vector3(0.6, 0.6, 0.6), delta * 5);
-    } else {
-      meshRef.current.position.lerp(new THREE.Vector3(...position), delta * 5);
-      const lm = new THREE.Matrix4().lookAt(meshRef.current.position, new THREE.Vector3(0,0,0), new THREE.Vector3(0,1,0));
-      meshRef.current.quaternion.slerp(new THREE.Quaternion().setFromRotationMatrix(lm), delta * 5);
-      // Con hint attivo la card si allarga leggermente come se il Joker la stesse "spingendo"
-      const baseScale = isHintActive ? 0.85 : 0.8;
-      const hoverScale = isHintActive ? 1.0 : 0.95;
-      meshRef.current.scale.lerp(
-        new THREE.Vector3(
-          hovered ? hoverScale : baseScale,
-          hovered ? hoverScale : baseScale,
-          hovered ? hoverScale : baseScale
-        ),
-        delta * 5
-      );
-    }
-  });
-
-  // Calcola le proprietà dinamiche del glow in base alla fase hint
-  const hintGlowMap: Record<number, { shadow: string; borderColor: string; bg: string }> = {
-    0: {
-      shadow: "0 0 20px rgba(102, 0, 197, 0.2), inset 0 0 10px rgba(102, 0, 197, 0.1)",
-      borderColor: "rgba(102, 0, 197, 0.8)",
-      bg: "rgba(0,0,0,0.9)",
-    },
-    1: {
-      shadow: "0 0 40px rgba(102, 0, 197, 0.5), inset 0 0 20px rgba(102, 0, 197, 0.25)",
-      borderColor: "rgba(102, 0, 197, 0.95)",
-      bg: "rgba(10, 0, 20, 0.92)",
-    },
-    2: {
-      shadow: "0 0 70px rgba(102, 0, 197, 0.75), inset 0 0 30px rgba(102, 0, 197, 0.4), 0 0 120px rgba(102, 0, 197, 0.3)",
-      borderColor: "#6600C5",
-      bg: "rgba(15, 0, 30, 0.95)",
-    },
-    3: {
-      shadow: "0 0 100px rgba(102, 0, 197, 1.0), inset 0 0 50px rgba(102, 0, 197, 0.6), 0 0 200px rgba(102, 0, 197, 0.5)",
-      borderColor: "#6600C5",
-      bg: "rgba(20, 0, 40, 0.97)",
-    },
-  };
-
-  const currentHint = isHintActive ? (hintGlowMap[hintPhase] ?? hintGlowMap[0]) : hintGlowMap[0];
-
-  const handleSuccess = () => {
-    setIsFlyingAway(true);
-    setTimeout(() => {
-      onSuccess();
-    }, 800);
-  };
-
-  if (isCompleted && !isFlyingAway) return null;
+  id: number;
+  hint: boolean;
+  onOpen: () => void;
+  disabled: boolean;
+}) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(({ camera }) => ref.current?.quaternion.copy(camera.quaternion));
   return (
-    <group ref={meshRef}>
-      <Html transform distanceFactor={60} zIndexRange={[100, 0]} center>
-        {/* Spotlight hint: cerchio luminoso attorno alla card quando hint è attivo */}
-        {isHintActive && hintPhase >= 2 && (
-          <motion.div
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              borderRadius: "50%",
-              pointerEvents: "none",
-              zIndex: -1,
-            }}
-            animate={{
-              width: hintPhase === 3 ? [220, 280, 220] : [180, 230, 180],
-              height: hintPhase === 3 ? [220, 280, 220] : [180, 230, 180],
-              opacity: hintPhase === 3 ? [0.25, 0.45, 0.25] : [0.15, 0.3, 0.15],
-              background: [
-                "radial-gradient(circle, rgba(102,0,197,0.4) 0%, rgba(102,0,197,0) 70%)",
-                "radial-gradient(circle, rgba(102,0,197,0.7) 0%, rgba(102,0,197,0) 70%)",
-                "radial-gradient(circle, rgba(102,0,197,0.4) 0%, rgba(102,0,197,0) 70%)",
-              ],
-            }}
-            transition={{
-              duration: hintPhase === 3 ? 1.5 : 2.5,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-        )}
-
-        <motion.div
-          onPointerEnter={(e) => { e.stopPropagation(); setHovered(true); }}
-          onPointerLeave={() => { setHovered(false); }}
-          onClick={(e) => { e.stopPropagation(); if (!isActive && !isPaused) onClick(); }}
-          animate={isFlyingAway ? {
-            scale: 0.1,
-            y: typeof window !== 'undefined' && window.innerWidth < 768 ? window.innerHeight / 2 - 60 : -(typeof window !== 'undefined' ? window.innerHeight : 1000) / 2 + 50,
-            x: typeof window !== 'undefined' && window.innerWidth < 768 ? -window.innerWidth / 2 + 60 : -(typeof window !== 'undefined' ? window.innerWidth : 1000) / 2 + 350,
-            opacity: 0,
-          } : {
-            borderColor: hovered || isActive
-              ? "#6600C5"
-              : isHintActive
-              ? [currentHint.borderColor, "#6600C5", currentHint.borderColor]
-              : "rgba(102, 0, 197, 0.8)",
-            boxShadow: hovered || isActive
-              ? "0 0 80px rgba(102, 0, 197, 0.9), inset 0 0 30px rgba(102, 0, 197, 0.5)"
-              : isHintActive
-              ? [
-                  currentHint.shadow,
-                  currentHint.shadow.replace(/0\.\d+\)/g, (m) =>
-                    String(Math.min(1, parseFloat(m) * 1.4)) + ")"
-                  ),
-                  currentHint.shadow,
-                ]
-              : [
-                  "0 0 20px rgba(102, 0, 197, 0.2), inset 0 0 10px rgba(102, 0, 197, 0.1)",
-                  "0 0 60px rgba(102, 0, 197, 0.7), inset 0 0 25px rgba(102, 0, 197, 0.4)",
-                  "0 0 20px rgba(102, 0, 197, 0.2), inset 0 0 10px rgba(102, 0, 197, 0.1)",
-                ],
-            scale: isActive ? 1.05 : hovered ? 1.05 : isHintActive ? [1, 1.06, 1, 1.04, 1] : [1, 1.05, 1],
-            // Fluttuazione lenta della card quando hint attivo
-            y: isHintActive && !isActive ? [0, -4, 0, -2, 0] : 0,
-            opacity: 1,
-          }}
-          transition={isFlyingAway ? {
-            duration: 0.8,
-            ease: "easeInOut"
-          } : {
-            boxShadow: {
-              duration: isHintActive ? (hintPhase === 3 ? 1.2 : 2.0) : 1.5,
-              repeat: Infinity,
-              ease: "easeInOut",
-            },
-            scale: isActive ? { duration: 0.3 } : {
-              duration: isHintActive ? (hintPhase === 3 ? 1.0 : 1.8) : 1.5,
-              repeat: Infinity,
-              ease: "easeInOut",
-            },
-            y: {
-              duration: 3.5,
-              repeat: Infinity,
-              ease: "easeInOut",
-            },
-            borderColor: { duration: 0.3 },
-          }}
-          style={{
-            width: 140,
-            height: 196,
-            background: isHintActive ? currentHint.bg : "rgba(0,0,0,0.9)",
-            borderRadius: 12,
-            border: "3px solid",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: isActive ? "default" : "pointer",
-            position: "relative",
-            transition: "background 0.8s ease",
-          }}
+    <group position={position} ref={ref}>
+      <Html transform distanceFactor={120} center>
+        <button
+          className={`clue-card ${hint ? "clue-hint" : ""}`}
+          disabled={disabled}
+          onClick={onOpen}
+          aria-label={`Apri indizio ${id}`}
         >
-          {/* Reflection overlay — luce ambientale sulla card quando hint */}
-          {isHintActive && (
-            <motion.div
-              style={{
-                position: "absolute",
-                inset: 0,
-                borderRadius: 10,
-                pointerEvents: "none",
-                background:
-                  "linear-gradient(135deg, rgba(102,0,197,0.08) 0%, transparent 50%, rgba(102,0,197,0.04) 100%)",
-              }}
-              animate={{ opacity: [0.6, 1, 0.6] }}
-              transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-            />
-          )}
-
-          {!isActive && (
-            <motion.div
-              animate={{
-                opacity: isHintActive ? [0.8, 1, 0.8] : [0.7, 0.9, 0.7],
-                filter: isHintActive
-                  ? ["drop-shadow(0 0 15px #6600C5)", "drop-shadow(0 0 35px #6600C5)", "drop-shadow(0 0 15px #6600C5)"]
-                  : ["drop-shadow(0 0 10px #6600C5)", "drop-shadow(0 0 10px #6600C5)"],
-              }}
-              transition={{
-                duration: isHintActive ? (hintPhase === 3 ? 1.0 : 1.8) : 1.5,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-              style={{ width: "100%", height: "100%", borderRadius: 8, overflow: "hidden", willChange: "filter, transform" }}
-            >
-              <img 
-                src="./assets/images/JollyJokerCard_Front.jpg" 
-                alt="Jolly Joker" 
-                loading="lazy"
-                decoding="async"
-                style={{ width: "100%", height: "100%", objectFit: "cover" }} 
-              />
-            </motion.div>
-          )}
-          <div
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%,-50%)",
-              opacity: isActive ? 1 : 0,
-              pointerEvents: isActive ? "auto" : "none",
-            }}
-          >
-            <JokerCard
-              id={riddle.id}
-              riddle={riddle.riddle}
-              options={riddle.options}
-              correctAnswer={riddle.correctAnswer}
-              onSuccess={handleSuccess}
-              onClose={onClose}
-              isFlipped={isActive}
-              isPaused={isPaused}
-            />
-          </div>
-        </motion.div>
+          <img src="/assets/images/JollyJokerCard_Front.jpg" alt="" />
+          <span>INDIZIO {id}</span>
+        </button>
       </Html>
     </group>
   );
 }
-
-function SceneContent({ texture, scene, cardPositions, activeCardId, completedIds, onCardClick, onCloseCard, onCardSuccess, isPaused, hoveredCountRef, hintCardId, hintPhase, onCardBecomeVisible }: any) {
-  const { set: setThree } = useThree();
-  useEffect(() => { setThree({ isPaused } as any); }, [isPaused, setThree]);
-
-  // Reset hovered count when scene changes
-  useEffect(() => {
-    if (hoveredCountRef) hoveredCountRef.current = 0;
-  }, [scene, hoveredCountRef]);
-
-  const riddles = scene === "batcomputer" ? BATCOMPUTER_RIDDLES : scene === "armeria" ? [ARMERIA_RIDDLE] : BATMOBILE_RIDDLES;
-  return (
-    <>
-      {texture && <PanoramaSphere texture={texture} onClick={() => { if (activeCardId !== null && !isPaused) onCloseCard(); }} />}
-      {cardPositions && riddles.map((r, i) => (
-        <ClueMesh
-          key={r.id}
-          position={cardPositions[i]}
-          riddle={r}
-          onClick={() => onCardClick(r.id)}
-          isCompleted={completedIds.includes(r.id)}
-          isActive={activeCardId === r.id}
-          onClose={onCloseCard}
-          onSuccess={() => onCardSuccess(r.id)}
-          isPaused={isPaused}
-          hoveredCountRef={hoveredCountRef}
-          isHintActive={hintCardId === r.id}
-          hintPhase={hintCardId === r.id ? hintPhase : 0}
-          onBecomeVisible={onCardBecomeVisible}
-        />
-      ))}
-    </>
-  );
-}
-
-function SharedPanoramaCanvas({ scene, onProgress, baseCompleted, isPaused, onNext, isMuted = false, isMissionActive = true }: SharedPanoramaCanvasProps) {
+export default function SharedPanoramaCanvas({
+  scene,
+  onProgress,
+  baseCompleted,
+  isPaused,
+  onNext,
+  isMuted = false,
+  isMissionActive = true,
+  onReady,
+  onExit,
+}: Props) {
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isExiting, setIsExiting] = useState(false);
-  const [activeCardId, setActiveCardId] = useState<number | null>(null);
-  const [completedIds, setCompletedIds] = useState<number[]>([]);
-  const [cardPositions, setCardPositions] = useState<[number,number,number][] | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-
-  // ── Joker Hint System ─────────────────────────────────────────────────
-  const { hintActive, hintCardId, hintPhase, resetHint, startHintTimer } = useJokerHint(
-    isPaused,
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const [completed, setCompleted] = useState<number[]>([]);
+  const [active, setActive] = useState<number | null>(null);
+  const [contextLost, setContextLost] = useState(false);
+  const [graphics, setGraphics] = useState<
+    "checking" | "available" | "unavailable"
+  >("checking");
+  useEffect(() => {
+    const probe = document.createElement("canvas");
+    try {
+      const gl = probe.getContext("webgl2");
+      setGraphics(gl ? "available" : "unavailable");
+      gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    } catch {
+      setGraphics("unavailable");
+    }
+  }, [retry]);
+  const [feedback, setFeedback] = useState("");
+  const video = useRef<HTMLVideoElement | null>(null);
+  const reduced = !!useReducedMotion();
+  const riddles =
+    scene === "batcomputer"
+      ? BATCOMPUTER_RIDDLES
+      : scene === "armeria"
+        ? ARMERIA_RIDDLES
+        : BATMOBILE_RIDDLES;
+  const hint = useJokerHint(
+    isPaused || loading,
     isMissionActive,
-    completedIds,
-    activeCardId
+    completed,
+    active,
   );
-
-  // Avvia il timer hint per ogni carta della scena appena le posizioni sono pronte
+  const { startHintTimer, resetHint } = hint;
   useEffect(() => {
-    if (!cardPositions || !isMissionActive) return;
-    const riddles =
-      scene === "batcomputer" ? BATCOMPUTER_RIDDLES
-      : scene === "armeria" ? [ARMERIA_RIDDLE]
-      : BATMOBILE_RIDDLES;
-
-    // Parte con il timer per la prima carta non completata
-    const firstPending = riddles.find((r) => !completedIds.includes(r.id));
-    if (firstPending) startHintTimer(firstPending.id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardPositions, scene, isMissionActive]);
-
-  // Quando una carta viene completata, avvia il timer per la successiva
-  const handleNextHintTarget = useCallback((newCompleted: number[]) => {
-    const riddles =
-      scene === "batcomputer" ? BATCOMPUTER_RIDDLES
-      : scene === "armeria" ? [ARMERIA_RIDDLE]
-      : BATMOBILE_RIDDLES;
-    const nextPending = riddles.find((r) => !newCompleted.includes(r.id));
-    if (nextPending) startHintTimer(nextPending.id);
+    if (active !== null) return;
+    const next = riddles.find((r) => !completed.includes(r.id));
+    if (next) startHintTimer(next.id);
     else resetHint();
-  }, [scene, startHintTimer, resetHint]);
-
-  // Reset interaction state on scene change
+  }, [riddles, completed, active, startHintTimer, resetHint]);
   useEffect(() => {
-    setActiveCardId(null);
-    setCompletedIds([]);
-    setIsExiting(false);
-    setIsLoading(true);
-    setCardPositions(null);
-  }, [scene]);
-
-  // Card positions — fixed per scene for reproducibility (BUG-021)
-  useEffect(() => {
-    const POSITIONS: Record<string, [number, number, number][]> = {
-      batcomputer: [
-        [190, -30, 60],
-        [-160, -20, 120],
-      ],
-      armeria: [
-        [170, 40, -100],
-      ],
-      batmobile: [
-        [-180, -10, 80],
-        [120, 30, -170],
-      ],
-    };
-    setCardPositions(POSITIONS[scene] ?? []);
-  }, [scene]);
-
-  // Load texture — cleanup ONLY disposes what belongs to this effect instance
-  useEffect(() => {
-    let active = true;
-    let myVideo: HTMLVideoElement | null = null;
-    let myTex: THREE.Texture | null = null;
-
-    // ── Helper: carica una VideoTexture con fallback a JPG statico ──────
-    const loadVideoScene = (
-      videoSrc: string,
-      staticFallbackSrc: string,
-      sceneLabel: string
-    ) => {
-      const video = document.createElement("video");
-      video.src = videoSrc;
-      video.loop = true;
-      video.muted = true;
-      video.playsInline = true;
-      video.crossOrigin = "anonymous";
-      myVideo = video;
-
-      const loadStaticFallback = () => {
-        if (!active) return;
-        console.log(`[Panorama] Video texture not usable, loading static fallback for ${sceneLabel}`);
-        const loader = new THREE.TextureLoader();
-        loader.load(
-          staticFallbackSrc,
-          (tex) => {
-            if (!active) { tex.dispose(); return; }
-            tex.colorSpace = THREE.SRGBColorSpace;
-            myTex = tex;
-            setTexture(tex);
-            setIsLoading(false);
-          },
-          undefined,
-          (err) => {
-            console.error(`[Panorama] Static fallback also failed for ${sceneLabel}:`, err);
-            if (active) setIsLoading(false);
-          }
-        );
-      };
-
-      const tex = new THREE.VideoTexture(video);
+    let alive = true,
+      fallback = false;
+    const textures = new Set<THREE.Texture>();
+    setLoading(true);
+    setFailed(false);
+    setTexture(null);
+    onReady?.(false);
+    const ready = (tex: THREE.Texture) => {
+      if (!alive) {
+        tex.dispose();
+        return;
+      }
+      textures.add(tex);
       tex.colorSpace = THREE.SRGBColorSpace;
-      myTex = tex;
-      videoRef.current = video;
-
-      let videoTextureWorking = false;
-
-      const onPlaying = () => {
-        if (!active) return;
-        try {
-          const testCanvas = document.createElement("canvas");
-          testCanvas.width = 4;
-          testCanvas.height = 4;
-          const ctx = testCanvas.getContext("2d");
-          ctx?.drawImage(video, 0, 0, 4, 4);
-          ctx?.getImageData(0, 0, 1, 1);
-          videoTextureWorking = true;
-          setTexture(tex);
-          setIsLoading(false);
-        } catch (e) {
-          video.pause();
-          loadStaticFallback();
-        }
-      };
-
-      const onError = () => {
-        if (!active) return;
-        loadStaticFallback();
-      };
-
-      video.addEventListener("playing", onPlaying, { once: true });
-      video.addEventListener("error", onError, { once: true });
-      video.load();
-      video.play().catch(() => loadStaticFallback());
-
-      const safety = setTimeout(() => {
-        if (!active) return;
-        if (!videoTextureWorking) loadStaticFallback();
-      }, 4000);
-
-      return () => {
-        active = false;
-        clearTimeout(safety);
-        video.removeEventListener("playing", onPlaying);
-        video.removeEventListener("error", onError);
-        video.pause();
-        video.src = "";
-        video.load();
-        videoRef.current = null;
-      };
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = false;
+      setTexture(tex);
+      setLoading(false);
+      onReady?.(true);
     };
-
-    // ── BatComputer: video animato 360° ──────────────────────────────────
-    if (scene === "batcomputer") {
-      return loadVideoScene(
-        "./assets/textures/BatCaverna_Batcomputer360.mp4",
-        "./assets/textures/BatCaverna_Batcomputer360.jpg",
-        "batcomputer"
-      );
+    const nextScene =
+      scene === "batcomputer"
+        ? "armeria"
+        : scene === "armeria"
+          ? "batmobile"
+          : null;
+    if (nextScene) {
+      const poster = new Image();
+      poster.src = `/assets/textures/${MEDIA[nextScene]}.jpg`;
     }
-
-    // ── Armeria: video animato 360° ───────────────────────────────────────
-    if (scene === "armeria") {
-      return loadVideoScene(
-        "./assets/textures/BatCaverna_Armeria360.mp4",
-        "./assets/textures/BatCaverna_Armeria360.jpg",
-        "armeria"
+    const loadStatic = () => {
+      if (!alive || fallback) return;
+      fallback = true;
+      video.current?.pause();
+      new THREE.TextureLoader().load(
+        `/assets/textures/${MEDIA[scene]}.jpg`,
+        ready,
+        undefined,
+        () => {
+          if (alive) {
+            setFailed(true);
+            setLoading(false);
+          }
+        },
       );
+    };
+    const el = document.createElement("video");
+    video.current = el;
+    el.loop = true;
+    el.muted = true;
+    el.playsInline = true;
+    el.preload = "metadata";
+    const tex = new THREE.VideoTexture(el);
+    textures.add(tex);
+    const playing = () => {
+      if (!fallback) ready(tex);
+    };
+    el.addEventListener("playing", playing);
+    el.addEventListener("error", loadStatic);
+    if (reduced) loadStatic();
+    else {
+      el.src = `/assets/textures/${MEDIA[scene]}.mp4`;
+      void el.play().catch(loadStatic);
     }
-
-    // ── BatMobile: video animato 360° ─────────────────────────────────────
-    return loadVideoScene(
-      "./assets/textures/BatCaverna_BatMobile360.mp4",
-      "./assets/textures/BatCaverna_BatMobile360.jpg",
-      "batmobile"
-    );
-  }, [scene]);
-
-  // Pause/resume video
+    const timeout = setTimeout(() => {
+      if (el.readyState < 2) loadStatic();
+    }, 8000);
+    return () => {
+      alive = false;
+      clearTimeout(timeout);
+      el.removeEventListener("playing", playing);
+      el.removeEventListener("error", loadStatic);
+      el.pause();
+      el.removeAttribute("src");
+      el.load();
+      video.current = null;
+      for (const item of textures) item.dispose();
+      onReady?.(false);
+    };
+  }, [scene, retry, reduced, onReady]);
   useEffect(() => {
-    if (!videoRef.current) return;
-    isPaused ? videoRef.current.pause() : videoRef.current.play().catch(() => {});
-  }, [isPaused]);
-
-  const handleCardSuccess = useCallback((id: number) => {
-    const newCompleted = [...completedIds, id];
-    setCompletedIds(newCompleted);
-    setActiveCardId(null);
-    resetHint(); // Reset hint immediatamente quando carta trovata
-    onProgress(baseCompleted + newCompleted.length);
-    const needed = scene === "armeria" ? 1 : 2;
-    if (newCompleted.length >= needed) {
-      setTimeout(() => { setIsExiting(true); setTimeout(onNext, 1000); }, 1000);
-    } else {
-      // Avvia timer hint per la prossima carta
-      handleNextHintTarget(newCompleted);
-    }
-  }, [completedIds, baseCompleted, scene, onProgress, onNext, resetHint, handleNextHintTarget]);
-
-  const areaLabel = scene === "batcomputer" ? "Batcaverna // Area Batcomputer" : scene === "armeria" ? "Area Armeria" : "Area Batmobile";
-  const hoveredCountRef = useRef(0);
-
-  return (
-    <div className="fixed inset-0 w-full h-full bg-black z-40 overflow-hidden">
-      <Canvas gl={{ antialias: true, toneMapping: THREE.NoToneMapping, powerPreference: "high-performance" }}>
-        <PerspectiveCamera makeDefault position={[0, 0, 0.1]} fov={75} />
-        <MouseLookControls enabled={!activeCardId && !isExiting && !isPaused} hoveredCountRef={hoveredCountRef} />
-        <SceneContent
-          texture={texture}
-          scene={scene}
-          cardPositions={cardPositions}
-          activeCardId={activeCardId}
-          completedIds={completedIds}
-          onCardClick={(id: number) => setActiveCardId(id)}
-          onCloseCard={() => setActiveCardId(null)}
-          onCardSuccess={handleCardSuccess}
-          isPaused={isPaused}
-          hoveredCountRef={hoveredCountRef}
-          hintCardId={hintCardId}
-          hintPhase={hintPhase}
-          onCardBecomeVisible={(id: number) => startHintTimer(id)}
-        />
-      </Canvas>
-
-      {/* ── Joker Hint System Overlay ─────────────────────────────── */}
-      <JokerHintSystem
-        hintActive={hintActive}
-        hintPhase={hintPhase}
-        isMuted={isMuted}
-        isPaused={isPaused}
-      />
-
-      <AnimatePresence>
-        {isLoading && (
-          <motion.div key="loading" initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.8 }} className="absolute inset-0 bg-black flex items-center justify-center z-[110]">
-            <motion.div animate={{ opacity: [0.2, 0.6, 0.2] }} transition={{ duration: 2, repeat: Infinity }} className="text-gold tracking-[1em] font-black italic uppercase text-[10px] font-mono">
-              Sincronizzazione Area...
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {isExiting && (
-          <motion.div key="exiting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }} className="absolute inset-0 bg-black z-[110] pointer-events-none" />
-        )}
-      </AnimatePresence>
-
-      <div className="absolute inset-0 pointer-events-none z-20" style={{ background: "radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.8) 100%)" }} />
-      <div className="absolute bottom-8 left-12 text-[9px] text-white/20 font-mono tracking-widest uppercase pointer-events-none z-30">
-        {areaLabel}<br />Indizi: {completedIds.length} / {scene === "armeria" ? 1 : 2}
+    const el = video.current;
+    if (!el || reduced || !el.getAttribute("src")) return;
+    if (isPaused) el.pause();
+    else void el.play().catch(() => {});
+  }, [isPaused, reduced]);
+  const complete = useCallback(
+    (id: number) => {
+      if (completed.includes(id) || isPaused) return;
+      const next = [...completed, id];
+      setCompleted(next);
+      setActive(null);
+      setFeedback("Risposta corretta. Indizio raccolto.");
+      onProgress(baseCompleted + next.length);
+      if (next.length === riddles.length) onNext();
+    },
+    [completed, isPaused, baseCompleted, onProgress, onNext, riddles.length],
+  );
+  const current = riddles.find((r) => r.id === active);
+  if (graphics === "unavailable")
+    return (
+      <section className="result-screen">
+        <p className="eyebrow">MODALITÀ ALTERNATIVA</p>
+        <h1>La Batcaverna non è disponibile.</h1>
+        <p>
+          Il browser non riesce ad avviare WebGL. Puoi riprovare o scoprire
+          direttamente la statua.
+        </p>
+        <div className="action-row">
+          <button
+            onClick={() => {
+              setGraphics("checking");
+              setRetry((r) => r + 1);
+            }}
+          >
+            Riprova
+          </button>
+          <button className="secondary" onClick={onExit}>
+            Scopri la statua
+          </button>
+        </div>
+      </section>
+    );
+  if (graphics === "checking")
+    return (
+      <div className="loading-screen" role="status">
+        Verifica grafica…
       </div>
-    </div>
+    );
+  if (failed || contextLost)
+    return (
+      <section className="result-screen">
+        <h1>Ambiente non disponibile</h1>
+        <p>
+          Non è stato possibile caricare questa area. Puoi riprovare oppure
+          scoprire la statua.
+        </p>
+        <div className="action-row">
+          <button
+            onClick={() => {
+              setContextLost(false);
+              setRetry((r) => r + 1);
+            }}
+          >
+            Riprova
+          </button>
+          <button className="secondary" onClick={onExit}>
+            Scopri la statua
+          </button>
+        </div>
+      </section>
+    );
+  return (
+    <section className="panorama-scene" aria-label={`Esplorazione: ${scene}`}>
+      <div
+        aria-hidden={active !== null || isPaused}
+        inert={active !== null || isPaused ? true : undefined}
+      >
+        <Canvas
+          gl={{ antialias: true, toneMapping: THREE.NoToneMapping }}
+          onCreated={({ gl }) => {
+            gl.domElement.addEventListener(
+              "webglcontextlost",
+              (e) => {
+                e.preventDefault();
+                onReady?.(false);
+                setContextLost(true);
+              },
+              { once: true },
+            );
+          }}
+        >
+          <PerspectiveCamera makeDefault position={[0, 0, 0.1]} fov={75} />
+          <MouseLookControls
+            enabled={active === null && !isPaused && !loading}
+          />
+          {texture && (
+            <mesh scale={[-1, 1, 1]} rotation={[0, -Math.PI / 2, 0]}>
+              <sphereGeometry args={[500, 64, 64]} />
+              <meshBasicMaterial map={texture} side={THREE.BackSide} />
+            </mesh>
+          )}
+          {riddles.map(
+            (r, i) =>
+              !completed.includes(r.id) && (
+                <Clue
+                  key={r.id}
+                  position={POSITIONS[scene][i]}
+                  id={r.id}
+                  hint={hint.hintCardId === r.id}
+                  onOpen={() => setActive(r.id)}
+                  disabled={isPaused || loading}
+                />
+              ),
+          )}
+        </Canvas>
+        <div className="scene-caption">
+          <p className="eyebrow">BATCAVERNA / {scene}</p>
+          <p>
+            Muovi il mouse ai bordi · Frecce: visuale · Tab: indizi · Esc: pausa
+          </p>
+          <p role="status">
+            {completed.length} / {riddles.length} indizi raccolti. {feedback}
+          </p>
+        </div>
+        <div
+          className="keyboard-clues"
+          aria-label="Indizi raggiungibili da tastiera"
+        >
+          {riddles.map((r) => (
+            <button
+              key={r.id}
+              disabled={completed.includes(r.id) || loading || isPaused}
+              onClick={() => setActive(r.id)}
+            >
+              {completed.includes(r.id) ? "✓" : "Apri"} indizio {r.id}
+            </button>
+          ))}
+        </div>
+      </div>
+      <JokerHintSystem {...hint} isMuted={isMuted} isPaused={isPaused} />
+      {loading && (
+        <div className="loading-screen" role="status">
+          Sincronizzazione area…
+        </div>
+      )}
+      {current && (
+        <JokerCard
+          key={current.id}
+          {...current}
+          onClose={() => setActive(null)}
+          onSuccess={complete}
+          isFlipped
+          isPaused={isPaused}
+        />
+      )}
+    </section>
   );
 }
-
-export default React.memo(SharedPanoramaCanvas);

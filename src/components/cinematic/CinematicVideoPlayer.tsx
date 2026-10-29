@@ -1,108 +1,65 @@
 import { useEffect, useRef, useState } from "react";
-
-interface CinematicVideoPlayerProps {
+interface Props {
   src: string;
   onEnded: () => void;
+  isPaused?: boolean;
+  reducedMotion?: boolean;
   label?: string;
   nextAsset?: string;
 }
-
-export default function CinematicVideoPlayer({ 
-  src, 
-  onEnded, 
-  label = "Spostamento...", 
-  nextAsset 
-}: CinematicVideoPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
-  const [videoEnded, setVideoEnded] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
-  const hasTriggeredExit = useRef(false);
-
-  // Preload next asset (silent background load)
-  useEffect(() => {
-    if (!nextAsset) return;
-    const img = new Image();
-    img.src = nextAsset;
-  }, [nextAsset]);
-
-  const markEnded = () => {
-    if (!hasTriggeredExit.current) {
-      hasTriggeredExit.current = true;
-      setVideoEnded(true);
+export default function CinematicVideoPlayer({
+  src,
+  onEnded,
+  isPaused,
+  reducedMotion,
+  label = "Accedi alla prossima area",
+}: Props) {
+  const video = useRef<HTMLVideoElement>(null);
+  const done = useRef(false);
+  const callback = useRef(onEnded);
+  callback.current = onEnded;
+  const [failed, setFailed] = useState(false);
+  const finish = () => {
+    if (!done.current && !isPaused) {
+      done.current = true;
+      callback.current();
     }
   };
-
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.addEventListener("ended", markEnded);
-
-    // Safety auto-advance basato sulla durata reale del video (+3s di margine)
-    // Fallback a 30s se la durata non è ancora nota
-    let safetyTimer: ReturnType<typeof setTimeout>;
-    const scheduleSafety = () => {
-      const duration = video.duration;
-      const delay = isFinite(duration) ? (duration * 1000 + 3000) : 30000;
-      safetyTimer = setTimeout(markEnded, delay);
-    };
-
-    if (video.readyState >= 1) {
-      scheduleSafety();
-    } else {
-      video.addEventListener("loadedmetadata", scheduleSafety, { once: true });
-      // Fallback se loadedmetadata non arriva
-      safetyTimer = setTimeout(markEnded, 30000);
-    }
-
-    const startVideo = async () => {
-      try {
-        video.currentTime = 0;
-        await video.play();
-      } catch (err) {
-        console.warn("Video playback failed:", err);
-        markEnded();
-      }
-    };
-
-    startVideo();
-
-    return () => {
-      video.removeEventListener("ended", markEnded);
-      video.removeEventListener("loadedmetadata", scheduleSafety);
-      clearTimeout(safetyTimer);
-    };
-  }, [src]);
-
-  // Keep a stable ref to onEnded so we don't need it in effect deps
-  const onEndedRef = useRef(onEnded);
-  useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
-
-  // Handle phase transition when video ends — deps ONLY on videoEnded
-  const transitionStarted = useRef(false);
+    const el = video.current;
+    if (!el || reducedMotion) return;
+    if (isPaused) el.pause();
+    else void el.play().catch(() => setFailed(true));
+  }, [isPaused, reducedMotion, src]);
   useEffect(() => {
-    if (!videoEnded || transitionStarted.current) return;
-    transitionStarted.current = true;
-    setIsExiting(true);
-
-    const t = setTimeout(() => {
-      onEndedRef.current();
-    }, 400);
-
+    if (isPaused || reducedMotion) return;
+    const t = setTimeout(() => setFailed(true), 30000);
     return () => clearTimeout(t);
-  }, [videoEnded]);
-
+  }, [isPaused, reducedMotion]);
   return (
-    <div className="fixed inset-0 bg-black flex items-center justify-center z-[500] overflow-hidden">
-      <video
-        ref={videoRef}
-        onPlaying={() => setIsVisible(true)}
-        className={`w-full h-full object-cover transition-opacity duration-700 ${isVisible && !isExiting ? "opacity-100" : "opacity-0"}`}
-        playsInline
-        muted
-        src={src}
-      />
-    </div>
+    <section className="transition-player">
+      {!reducedMotion && !failed && (
+        <video
+          ref={video}
+          src={src}
+          muted
+          playsInline
+          onEnded={finish}
+          onError={() => setFailed(true)}
+        />
+      )}
+      <div className="transition-controls">
+        <p>
+          {failed
+            ? "Il filmato non è disponibile. Puoi continuare."
+            : reducedMotion
+              ? "Modalità a movimento ridotto"
+              : "Trasferimento alla prossima area"}
+        </p>
+        <button disabled={isPaused} onClick={finish}>
+          {label}
+        </button>
+      </div>
+    </section>
   );
 }
