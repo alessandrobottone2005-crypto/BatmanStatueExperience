@@ -6,7 +6,7 @@ export function useMissionTimer(
   missionStatus: "idle" | "active" | "failed" | "succeeded",
   isPaused: boolean,
   isVideoTransition: boolean,
-  onTimeUp: () => void
+  onTimeUp: () => void,
 ) {
   const [timeLeft, setTimeLeft] = useState(TOTAL_TIME);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -14,14 +14,16 @@ export function useMissionTimer(
 
   // Refs per non avere dipendenze instabili nell'effect principale
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const endTimeRef = useRef<number | null>(null);     // quando il timer arriva a 0 (performance.now)
-  const startTimeRef = useRef<number | null>(null);   // quando la missione è partita
-  const totalPausedRef = useRef<number>(0);           // ms totali in pausa
-  const pauseStartRef = useRef<number | null>(null);  // inizio pausa corrente
+  const endTimeRef = useRef<number | null>(null); // quando il timer arriva a 0 (performance.now)
+  const startTimeRef = useRef<number | null>(null); // quando la missione è partita
+  const totalPausedRef = useRef<number>(0); // ms totali in pausa
+  const pauseStartRef = useRef<number | null>(null); // inizio pausa corrente
   const onTimeUpRef = useRef(onTimeUp);
 
   // Aggiorna sempre la ref senza aggiungere onTimeUp alle deps dell'effect
-  useEffect(() => { onTimeUpRef.current = onTimeUp; }, [onTimeUp]);
+  useEffect(() => {
+    onTimeUpRef.current = onTimeUp;
+  }, [onTimeUp]);
 
   const clearTimerInterval = useCallback(() => {
     if (timerRef.current) {
@@ -36,8 +38,13 @@ export function useMissionTimer(
       if (endTimeRef.current === null || startTimeRef.current === null) return;
 
       const now = performance.now();
-      const remaining = Math.max(0, Math.ceil((endTimeRef.current - now) / 1000));
-      const paused = totalPausedRef.current + (pauseStartRef.current !== null ? now - pauseStartRef.current : 0);
+      const remaining = Math.max(
+        0,
+        Math.ceil((endTimeRef.current - now) / 1000),
+      );
+      const paused =
+        totalPausedRef.current +
+        (pauseStartRef.current !== null ? now - pauseStartRef.current : 0);
       const elapsed = Math.floor((now - startTimeRef.current - paused) / 1000);
 
       setTimeLeft(remaining);
@@ -94,9 +101,14 @@ export function useMissionTimer(
     return () => {
       clearTimerInterval();
     };
-  // NON includere timeLeft — l'intervallo gestisce i propri tick tramite refs
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [missionStatus, isPaused, isVideoTransition, clearTimerInterval, startInterval]);
+    // NON includere timeLeft — l'intervallo gestisce i propri tick tramite refs
+  }, [
+    missionStatus,
+    isPaused,
+    isVideoTransition,
+    clearTimerInterval,
+    startInterval,
+  ]);
 
   const resetTimer = useCallback(() => {
     clearTimerInterval();
@@ -109,17 +121,20 @@ export function useMissionTimer(
     pauseStartRef.current = null;
   }, [clearTimerInterval]);
 
-  const grantBonusTime = useCallback((amount: number) => {
-    if (!bonusTimeGranted) {
-      setTimeLeft(prev => prev + amount);
-      if (endTimeRef.current) {
-        endTimeRef.current += amount * 1000;
+  const grantBonusTime = useCallback(
+    (amount: number) => {
+      if (!bonusTimeGranted) {
+        setTimeLeft((prev) => prev + amount);
+        if (endTimeRef.current) {
+          endTimeRef.current += amount * 1000;
+        }
+        setBonusTimeGranted(true);
+        return true;
       }
-      setBonusTimeGranted(true);
-      return true;
-    }
-    return false;
-  }, [bonusTimeGranted]);
+      return false;
+    },
+    [bonusTimeGranted],
+  );
 
   return {
     timeLeft,

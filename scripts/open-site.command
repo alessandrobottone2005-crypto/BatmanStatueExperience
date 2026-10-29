@@ -1,6 +1,6 @@
 #!/bin/bash
-cd "$(dirname "$0")/dist"
-echo "🦇 Batman Site — Server locale avviato su http://localhost:8000"
-echo "   Aprendo il browser..."
-open http://localhost:8000
-python3 -m http.server 8000
+set -euo pipefail
+cd "$(dirname "$0")/.."
+if [ ! -f dist/index.html ]; then npm run build; fi
+open http://localhost:4173
+npm run preview -- --port 4173 --strictPort
